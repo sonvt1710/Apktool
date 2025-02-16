@@ -17,6 +17,7 @@
 package brut.androlib.res.decoder;
 
 import android.util.TypedValue;
+import brut.androlib.res.data.ResTable;
 
 import java.util.regex.Pattern;
 
@@ -24,7 +25,6 @@ import java.util.regex.Pattern;
  * AXmlResourceParser specifically for parsing encoded AndroidManifest.xml.
  */
 public class AndroidManifestResourceParser extends AXmlResourceParser {
-
     /**
      * Pattern for matching numeric string meta-data values. aapt automatically infers the
      * type for a manifest meta-data value based on the string in the unencoded XML. However,
@@ -33,6 +33,10 @@ public class AndroidManifestResourceParser extends AXmlResourceParser {
      * With aapt1, the escaped space is dropped when encoded. For aapt2, the escaped space is preserved.
      */
     private static final Pattern PATTERN_NUMERIC_STRING = Pattern.compile("\\s?\\d+");
+
+    public AndroidManifestResourceParser(ResTable resTable) {
+        super(resTable);
+    }
 
     @Override
     public String getAttributeValue(int index) {
@@ -53,9 +57,9 @@ public class AndroidManifestResourceParser extends AXmlResourceParser {
     }
 
     private boolean isNumericStringMetadataAttributeValue(int index, String value) {
-        return "meta-data".equalsIgnoreCase(super.getName())
-            && "value".equalsIgnoreCase(super.getAttributeName(index))
-            && super.getAttributeValueType(index) == TypedValue.TYPE_STRING
-            && PATTERN_NUMERIC_STRING.matcher(value).matches();
+        return "meta-data".equals(super.getName())
+                && "value".equals(super.getAttributeName(index))
+                && super.getAttributeValueType(index) == TypedValue.TYPE_STRING
+                && PATTERN_NUMERIC_STRING.matcher(value).matches();
     }
 }

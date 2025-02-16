@@ -16,8 +16,9 @@
  */
 package brut.androlib.res.data;
 
-import brut.androlib.AndrolibException;
-import brut.androlib.err.UndefinedResObjectException;
+import brut.androlib.exceptions.AndrolibException;
+import brut.androlib.exceptions.UndefinedResObjectException;
+import com.google.common.collect.Sets;
 import org.apache.commons.lang3.StringUtils;
 
 import java.util.LinkedHashMap;
@@ -26,28 +27,27 @@ import java.util.Map;
 import java.util.Set;
 
 public class ResResSpec {
+    private static final Set<String> EMPTY_RESOURCE_NAMES = Sets.newHashSet(
+        "0_resource_name_obfuscated", "(name removed)"
+    );
+
     private final ResID mId;
     private final String mName;
     private final ResPackage mPackage;
     private final ResTypeSpec mType;
-    private final Map<ResConfigFlags, ResResource> mResources = new LinkedHashMap<>();
+    private final Map<ResConfigFlags, ResResource> mResources;
 
     public ResResSpec(ResID id, String name, ResPackage pkg, ResTypeSpec type) {
-        this.mId = id;
-        String cleanName;
-
-        name = (("(name removed)".equals(name)) ? null : name);
-
-        ResResSpec resResSpec = type.getResSpecUnsafe(name);
-        if (resResSpec != null) {
-            cleanName = String.format("APKTOOL_DUPLICATE_%s_%s", type, id.toString());
-        } else {
-            cleanName = ((name == null || name.isEmpty()) ? ("APKTOOL_DUMMYVAL_" + id.toString()) : name);
+        mId = id;
+        if (name == null || name.isEmpty() || EMPTY_RESOURCE_NAMES.contains(name)) {
+            name = "APKTOOL_DUMMYVAL_" + id;
+        } else if (type.getResSpecUnsafe(name) != null) {
+            name = String.format("APKTOOL_DUPLICATE_%s_%s", type, id);
         }
-
-        this.mName = cleanName;
-        this.mPackage = pkg;
-        this.mType = type;
+        mName = name;
+        mPackage = pkg;
+        mType = type;
+        mResources = new LinkedHashMap<>();
     }
 
     public Set<ResResource> listResources() {
@@ -116,6 +116,6 @@ public class ResResSpec {
 
     @Override
     public String toString() {
-        return mId.toString() + " " + mType.toString() + "/" + mName;
+        return mId + " " + mType + "/" + mName;
     }
 }

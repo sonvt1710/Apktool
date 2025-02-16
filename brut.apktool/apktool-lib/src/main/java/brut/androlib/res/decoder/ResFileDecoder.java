@@ -16,15 +16,16 @@
  */
 package brut.androlib.res.decoder;
 
-import brut.androlib.AndrolibException;
-import brut.androlib.err.CantFind9PatchChunkException;
-import brut.androlib.err.RawXmlEncounteredException;
+import brut.androlib.exceptions.AndrolibException;
+import brut.androlib.exceptions.CantFind9PatchChunkException;
+import brut.androlib.exceptions.RawXmlEncounteredException;
 import brut.androlib.res.data.ResResource;
 import brut.androlib.res.data.value.ResBoolValue;
 import brut.androlib.res.data.value.ResFileValue;
-import brut.directory.DirUtil;
 import brut.directory.Directory;
 import brut.directory.DirectoryException;
+import brut.directory.DirUtils;
+import brut.util.BrutIO;
 
 import java.io.*;
 import java.util.Map;
@@ -32,10 +33,21 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class ResFileDecoder {
+    private static final Logger LOGGER = Logger.getLogger(ResFileDecoder.class.getName());
+
+    private static final String[] RAW_IMAGE_EXTENSIONS = {
+            "m4a", // apple
+            "qmg", // samsung
+    };
+    private static final String[] RAW_9PATCH_IMAGE_EXTENSIONS = {
+            "qmg", // samsung
+            "spi", // samsung
+    };
+
     private final ResStreamDecoderContainer mDecoders;
 
     public ResFileDecoder(ResStreamDecoderContainer decoders) {
-        this.mDecoders = decoders;
+        mDecoders = decoders;
     }
 
     public void decode(ResResource res, Directory inDir, Directory outDir, Map<String, String> resFileMapping)
@@ -44,8 +56,15 @@ public class ResFileDecoder {
         ResFileValue fileValue = (ResFileValue) res.getValue();
         String inFilePath = fileValue.toString();
         String inFileName = fileValue.getStrippedPath();
-        String outResName = res.getFilePath();
         String typeName = res.getResSpec().getType().getName();
+        String outResName = res.getFilePath();
+
+        if (BrutIO.detectPossibleDirectoryTraversal(outResName)) {
+            outResName = inFileName;
+            LOGGER.warning(String.format(
+                "Potentially malicious file path: %s, using instead %s", res.getFilePath(), outResName
+            ));
+        }
 
         String ext = null;
         String outFileName;
@@ -61,6 +80,8 @@ public class ResFileDecoder {
         if (!inFilePath.equals(outFilePath)) {
             resFileMapping.put(inFilePath, outFilePath);
         }
+
+        LOGGER.fine("Decoding file " + inFilePath + " to " + outFilePath);
 
         try {
             if (typeName.equals("raw")) {
@@ -99,7 +120,7 @@ public class ResFileDecoder {
                         return;
                     } catch (CantFind9PatchChunkException ex) {
                         LOGGER.log(Level.WARNING, String.format(
-                            "Cant find 9patch chunk in file: \"%s\". Renaming it to *.png.", inFileName
+                            "Could not find 9patch chunk in file: \"%s\". Renaming it to *.png.", inFileName
                         ), ex);
                         outDir.removeFile(outFileName);
                         outFileName = outResName + ext;
@@ -137,8 +158,8 @@ public class ResFileDecoder {
     public void decode(Directory inDir, String inFileName, Directory outDir,
                        String outFileName, String decoder) throws AndrolibException {
         try (
-                InputStream in = inDir.getFileInput(inFileName);
-                OutputStream out = outDir.getFileOutput(outFileName)
+            InputStream in = inDir.getFileInput(inFileName);
+            OutputStream out = outDir.getFileOutput(outFileName)
         ) {
             mDecoders.decode(in, out, decoder);
         } catch (DirectoryException | IOException ex) {
@@ -146,36 +167,12 @@ public class ResFileDecoder {
         }
     }
 
-    public void copyRaw(Directory inDir, Directory outDir, String inFilename,
-                        String outFilename) throws AndrolibException {
+    public void copyRaw(Directory inDir, Directory outDir, String inFileName,
+                        String outFileName) throws AndrolibException {
         try {
-            DirUtil.copyToDir(inDir, outDir, inFilename, outFilename);
+            DirUtils.copyToDir(inDir, outDir, inFileName, outFileName);
         } catch (DirectoryException ex) {
             throw new AndrolibException(ex);
         }
     }
-
-    public void decodeManifest(Directory inDir, String inFileName,
-                               Directory outDir, String outFileName) throws AndrolibException {
-        try (
-                InputStream in = inDir.getFileInput(inFileName);
-                OutputStream out = outDir.getFileOutput(outFileName)
-        ) {
-            ((XmlPullStreamDecoder) mDecoders.getDecoder("xml")).decodeManifest(in, out);
-        } catch (DirectoryException | IOException ex) {
-            throw new AndrolibException(ex);
-        }
-    }
-
-    private final static Logger LOGGER = Logger.getLogger(ResFileDecoder.class.getName());
-
-    private final static String[] RAW_IMAGE_EXTENSIONS = new String[] {
-        "m4a", // apple
-        "qmg", // samsung
-    };
-
-    private final static String[] RAW_9PATCH_IMAGE_EXTENSIONS = new String[] {
-        "qmg", // samsung
-        "spi", // samsung
-    };
 }
